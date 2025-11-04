@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Start D-Bus daemon if not already running
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax)
+    export DBUS_SESSION_BUS_ADDRESS
+fi
+
+# Launch Microsoft Edge with Wayland support
+# Using ANGLE with OpenGL backend for GPU acceleration
+exec microsoft-edge-stable \
+    --enable-features=UseOzonePlatform,VaapiVideoDecoder \
+    --ozone-platform=wayland \
+    --disable-dev-shm-usage \
+    --use-gl=angle \
+    --use-angle=gl \
+    --ignore-gpu-blocklist 2>&1 | grep -v "Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket"

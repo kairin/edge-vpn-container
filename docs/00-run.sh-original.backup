@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Script to run the Edge VPN container with proper configuration
+
+docker run -it --rm \
+  --name edge-vpn-container \
+  --ipc=host \
+  --shm-size=2gb \
+  -u $(id -u):$(id -g) \
+  -v /home/kkk:/home/kkk \
+  -v /home/kkk/.config/microsoft-edge-docker:/home/kkk/.config/microsoft-edge \
+  --workdir /home/kkk \
+  -e DISPLAY=$DISPLAY \
+  -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
+  -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  -v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
+  -v /dev/dri:/dev/dri \
+  -v /home/kkk/Downloads:/home/kkk/Downloads \
+  --device /dev/dri \
+  --cap-add=SYS_ADMIN \
+  --security-opt seccomp=unconfined \
+  edge-vpn
