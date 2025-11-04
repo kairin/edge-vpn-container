@@ -126,11 +126,14 @@ This document outlines the rules for maintaining the structure of this repositor
 
 The root folder of this repository should only contain the following files:
 
-- `/home/user/Apps/edge-vpn-container/AGENTS.md` (this file)
-- `/home/user/Apps/edge-vpn-container/README.md`
-- `/home/user/Apps/edge-vpn-container/Dockerfile`
-- `/home/user/Apps/edge-vpn-container/run.sh`
-- The two symlinks `/home/user/Apps/edge-vpn-container/GEMINI.md` and `/home/user/Apps/edge-vpn-container/CLAUDE.md` that symlink to `/home/user/Apps/edge-vpn-container/AGENTS.md`
+- `AGENTS.md` (this file - source of truth for LLM agent instructions)
+- `README.md` (user-facing documentation)
+- `Dockerfile` (container image definition)
+- `run.sh` (container launcher script)
+- `CLAUDE.md` (symlink → AGENTS.md) **MUST be symlink, NOT regular file**
+- `GEMINI.md` (symlink → AGENTS.md) **MUST be symlink, NOT regular file**
+
+**CRITICAL**: `CLAUDE.md` and `GEMINI.md` MUST always remain symbolic links to `AGENTS.md`. Never convert them to standalone files. This ensures all LLM agents (Claude, Gemini, etc.) receive identical instructions and prevents documentation drift.
 
 All other files and directories should be placed in appropriate subfolders:
 
