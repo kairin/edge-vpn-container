@@ -1,301 +1,465 @@
 # Edge VPN Container
 
-Secure, isolated Microsoft Edge browser with F5 VPN client running in Docker.
-
----
+Containerized Microsoft Edge browser with NVIDIA GPU acceleration, built on CUDA Deep Learning base image (Ubuntu 24.04).
 
 ## Quick Start
 
-### 1. Build the Container
+```bash
+# Step 1: Verify host system prerequisites
+./scripts/verify-host.sh
+
+# Step 2: Build the Docker image
+./scripts/build.sh
+
+# Step 3: Run the container
+./scripts/run.sh
+```
+
+## System Requirements
+
+### Host System
+- **OS**: Linux with X11 or Wayland display server
+- **Docker**: Version 20.10+ with NVIDIA Container Toolkit
+- **NVIDIA GPU**: Any CUDA-capable GPU
+- **NVIDIA Driver**: Version 535+ (CUDA 13.0 compatible)
+- **Display**: X11 socket accessible at `/tmp/.X11-unix`
+
+### Tested Configuration
+- OS: Ubuntu 25.10 (Oracular Oriole)
+- Docker: 28.5.1
+- NVIDIA Driver: 580.95.05
+- GPU: NVIDIA GeForce RTX 4080 SUPER (16GB VRAM)
+- Display: Wayland with X11 compatibility
+
+## Three-Step Workflow
+
+### 1. Pre-Flight Verification: `scripts/verify-host.sh`
+
+**Purpose:** Verify host system is properly configured before building or running container.
+
+**What it checks:**
+- ✅ DISPLAY environment variable
+- ✅ X11 socket accessibility (`/tmp/.X11-unix`)
+- ✅ xhost access control configuration
+- ✅ Docker installation and permissions
+- ✅ NVIDIA GPU detection and status
+- ✅ NVIDIA capabilities (NVENC, NVDEC, compute, persistence mode)
+- ✅ NVIDIA Docker runtime availability
+
+**Logging:**
+- Location: `logs/verify-host/verify-host-YYYY-MM-DD_HH-MM-SS.md`
+- Format: Markdown with complete verification output
+- Contains: All checks, GPU information, system status
+
+**When to run:**
+- Before first build
+- After driver updates
+- When troubleshooting display or GPU issues
+- After system configuration changes
 
 ```bash
-docker build -t edge-vpn .
+./scripts/verify-host.sh
 ```
 
-### 2. Run the Container
+**Expected output:**
+```
+========================================
+Host Display Configuration Verification
+========================================
+✓ DISPLAY is set: :0
+✓ Found 2 X11 socket(s)
+✓ Access control is enabled
+✓ Docker is installed
+✓ nvidia-smi is available
+✓ NVIDIA runtime is available
+========================================
+✓ All checks passed!
+Your system is ready to run the container.
+Execute: ./scripts/build.sh
+========================================
+```
+
+---
+
+### 2. Image Build: `scripts/build.sh`
+
+**Purpose:** Build the Docker image with NVIDIA CUDA base and Microsoft Edge.
+
+**What it does:**
+- Pulls NVIDIA CUDA Deep Learning base image (~4.5 GB)
+- Installs Microsoft Edge stable and dependencies
+- Installs OpenGL/EGL libraries for GPU rendering
+- Creates `cuda-container` image
+
+**Logging:**
+- Location: `logs/docker-builds/build-YYYY-MM-DD_HH-MM-SS.md`
+- Format: Markdown with complete build output
+- Contains: All Docker layers, downloads, package installations
+
+**Build time:** ~5-10 minutes (depending on network speed)
+
+**When to run:**
+- First time setup
+- After Dockerfile changes
+- To update to latest NVIDIA base image
+- To upgrade Microsoft Edge version
 
 ```bash
-./run.sh
+./scripts/build.sh
 ```
 
-That's it! Edge will launch with your VPN client available.
-
----
-
-## Features
-
-- ✅ **Isolated Environment** - Runs Edge in secure container
-- ✅ **Wayland & X11 Support** - Auto-detects display server
-- ✅ **GPU Acceleration** - Hardware accelerated rendering
-- ✅ **Persistent Downloads** - Downloads saved to `~/Downloads`
-- ✅ **Persistent Config** - Settings saved in `~/.config/microsoft-edge-docker`
-- ✅ **Security Hardened** - Follows Docker best practices
-- ✅ **Dynamic Configuration** - Works for any user, no hardcoded paths
-
----
-
-## File Structure
-
+**Expected output:**
 ```
-edge-vpn-container/
-├── Dockerfile                   # Container image definition
-├── start.sh                     # Container startup script
-├── run.sh                       # Host launcher script
-├── linux_f5vpn.x86_64.deb      # F5 VPN client installer
-├── README.md                    # This file
-├── SECURITY_REVIEW.md           # Security analysis
-├── IMPROVEMENTS.md              # What was improved and why
-└── DOWNLOADS_PERSISTENCE.md     # Download configuration details
+Building cuda-container image...
+Build process will be logged to: logs/docker-builds/build-2025-11-05_16-30-00.md
+
+[Docker build output...]
+
+========================================
+Build completed successfully!
+Build log saved to: logs/docker-builds/build-2025-11-05_16-30-00.md
+========================================
+
+You can now run ./scripts/run.sh to launch the container
 ```
 
 ---
 
-## Requirements
+### 3. Container Launch: `scripts/run.sh`
 
-- **Docker** 20.10+ (28.5.1 tested)
-- **Ubuntu** 24.04+ or similar (25.10 host tested)
-- **Display Server** - Wayland or X11
-- **GPU** (optional) - For hardware acceleration
+**Purpose:** Launch the containerized Edge browser with GPU acceleration and X11 forwarding.
 
----
+**What it does:**
+- Verifies `cuda-container` image exists
+- Runs container with NVIDIA runtime
+- Mounts X11 sockets for GUI display
+- Mounts home directory for file access
+- Configures CUDA optimizations (SHMEM, memory locking)
+- Logs complete container session
 
-## Configuration
+**Logging:**
+- Location: `logs/container-sessions/session-YYYY-MM-DD_HH-MM-SS.md`
+- Format: Markdown with complete session output
+- Contains: All commands typed, outputs, timestamps
 
-### Default Settings
+**Container Configuration:**
+- Runtime: NVIDIA (`--runtime=nvidia`)
+- User: Non-root (matches host UID:GID)
+- Network: Host network mode
+- IPC: Host IPC namespace (for CUDA SHMEM)
+- Display: X11 forwarding via mounted socket
+- Volumes: Home directory (read-write)
 
-| Setting | Value | Customizable |
-|---------|-------|--------------|
-| Downloads | `~/Downloads` | ✅ Yes |
-| Config | `~/.config/microsoft-edge-docker` | ✅ Yes |
-| Memory Limit | 4GB | ✅ Yes |
-| CPU Limit | 4 cores | ✅ Yes |
-| Display | Auto-detect | ❌ Auto |
-
-### Customize Resource Limits
-
-Edit `run.sh` and modify:
+**When to run:**
+- After successful build
+- Every time you want to use the browser
+- For testing and validation
 
 ```bash
---memory=4g       # Change to 2g, 8g, etc.
---cpus=4          # Change to 2, 8, etc.
---shm-size=2gb    # Increase for many browser tabs
+./scripts/run.sh
 ```
 
-### Customize Download Location
+**Expected output:**
+```
+Launching container...
+Session will be logged to: logs/container-sessions/session-2025-11-05_16-35-00.md
 
-Edit `run.sh` and change:
+[Container starts, you get shell prompt]
+ubuntu@hostname:~$ microsoft-edge --no-sandbox
+[Edge browser launches]
+ubuntu@hostname:~$ exit
 
-```bash
-DOWNLOADS_DIR="${USER_HOME}/Downloads"
-# To:
-DOWNLOADS_DIR="/path/to/your/downloads"
+========================================
+Session log saved to: logs/container-sessions/session-2025-11-05_16-35-00.md
+========================================
 ```
 
 ---
 
-## Security
+## Complete Setup Example
 
-This container follows security best practices:
+```bash
+# Clone or download this repository
+cd /path/to/edge-vpn-container
 
-- ✅ **Non-root user** - Runs as your UID/GID
-- ✅ **Seccomp enabled** - Syscall filtering active
-- ✅ **No extra capabilities** - Least privilege principle
-- ✅ **Isolated IPC** - Separate IPC namespace
-- ✅ **Resource limits** - Prevents resource exhaustion
-- ✅ **No new privileges** - Cannot escalate privileges
-- ✅ **Read-only mounts** - Where appropriate
+# Step 1: Verify your system is ready
+./scripts/verify-host.sh
+# → logs/verify-host/verify-host-2025-11-05_15-00-00.md
 
-For detailed security analysis, see [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md).
+# Step 2: Build the Docker image (one-time setup)
+./scripts/build.sh
+# → logs/docker-builds/build-2025-11-05_15-05-00.md
+# This takes 5-10 minutes
+
+# Step 3: Run the container
+./scripts/run.sh
+# → logs/container-sessions/session-2025-11-05_15-15-00.md
+
+# Inside the container, launch Edge
+ubuntu@hostname:~$ microsoft-edge --no-sandbox
+
+# When done, exit the container
+ubuntu@hostname:~$ exit
+```
+
+---
+
+## Container Technical Details
+
+### Base Image
+- **Image**: `nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04`
+- **OS**: Ubuntu 24.04.3 LTS (Noble Numbat)
+- **CUDA**: 13.0.88
+- **cuDNN**: 9.14
+- **NCCL**: 2.27
+- **TensorRT**: 10.13
+
+### Installed Software
+- Microsoft Edge Stable (latest)
+- OpenGL libraries (libgl1, libegl1)
+- CUDA runtime libraries
+
+### Security Features
+- Non-root user (matches host UID/GID)
+- Resource limits configured
+- Default seccomp profile enabled
+- No unnecessary capabilities granted
+
+### GPU Access
+- Full NVIDIA GPU passthrough via `--runtime=nvidia`
+- Hardware video encoding (NVENC)
+- Hardware video decoding (NVDEC)
+- CUDA compute capabilities
+- OpenGL/EGL rendering
+
+---
+
+## Logging System
+
+All three scripts automatically log their complete output to timestamped markdown files:
+
+```
+logs/
+├── verify-host/           # Host verification logs
+│   └── verify-host-*.md   # System check results
+├── docker-builds/         # Image build logs
+│   └── build-*.md         # Docker build output
+└── container-sessions/    # Container session logs
+    └── session-*.md       # Everything that happens inside container
+```
+
+### View Logs
+
+```bash
+# View most recent verification
+cat $(ls -t logs/verify-host/*.md | head -1)
+
+# View most recent build
+cat $(ls -t logs/docker-builds/*.md | head -1)
+
+# View most recent session
+cat $(ls -t logs/container-sessions/*.md | head -1)
+```
+
+### Log Cleanup
+
+```bash
+# Delete logs older than 30 days
+find logs -name "*.md" -mtime +30 -delete
+
+# Keep only 10 most recent of each type
+ls -t logs/verify-host/*.md | tail -n +11 | xargs rm -f
+ls -t logs/docker-builds/*.md | tail -n +11 | xargs rm -f
+ls -t logs/container-sessions/*.md | tail -n +11 | xargs rm -f
+```
+
+See [logs/README.md](logs/README.md) for detailed documentation.
 
 ---
 
 ## Troubleshooting
 
-### Container Won't Start
+### Build Issues
 
+**Problem:** Docker build fails with network errors
 ```bash
-# Check if image exists
-docker images | grep edge-vpn
+# Check internet connectivity
+curl -I https://packages.microsoft.com
 
-# If not, rebuild
-docker build -t edge-vpn .
+# Try build again (Docker caches successful layers)
+./scripts/build.sh
 ```
 
-### Display Not Working
-
+**Problem:** Permission denied during build
 ```bash
-# Check display server
-echo "DISPLAY=$DISPLAY"
-echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
-
-# Test X11 access
-xhost +local:
-
-# Check XDG_RUNTIME_DIR
-echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+# Ensure user is in docker group
+sudo usermod -aG docker $USER
+# Log out and back in for changes to take effect
 ```
 
-### GPU Not Working
+### Display Issues
 
+**Problem:** Container can't access display
 ```bash
-# Check GPU devices
-ls -la /dev/dri/
+# Check DISPLAY variable
+echo $DISPLAY
 
-# Check permissions
-groups | grep video
+# Enable X11 access for Docker
+xhost +local:docker
 
-# Test inside container
-docker exec edge-vpn-container ls -la /dev/dri/
+# Verify with verification script
+./scripts/verify-host.sh
 ```
 
-### Downloads Not Persisting
-
+**Problem:** "No protocol specified" error
 ```bash
-# Test file creation
-docker exec edge-vpn-container touch ~/Downloads/test.txt
-ls ~/Downloads/test.txt
-
-# If fails, check mounts
-docker inspect edge-vpn-container | jq '.[0].Mounts'
+# This means xhost access control is blocking Docker
+xhost +local:docker
 ```
 
-### Permission Errors
+### GPU Issues
 
+**Problem:** GPU not detected in container
 ```bash
-# Verify UID/GID match
-echo "Host UID: $(id -u)"
-docker exec edge-vpn-container id -u
+# Verify NVIDIA runtime is installed
+docker info | grep -i nvidia
 
-# Should match. If not, check run.sh:
-# -u $(id -u):$(id -g)
+# Test GPU access
+docker run --runtime=nvidia --rm nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04 nvidia-smi
+```
+
+**Problem:** "nvidia-smi: command not found"
+```bash
+# Install NVIDIA drivers on host
+# Ubuntu: sudo ubuntu-drivers autoinstall
+
+# Install NVIDIA Container Toolkit
+# See: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+```
+
+### Edge Browser Issues
+
+**Problem:** Edge doesn't launch or crashes
+```bash
+# Inside container, check Edge installation
+dpkg -l | grep edge
+
+# Try launching with verbose output
+microsoft-edge --no-sandbox --verbose
+
+# Check for missing libraries
+ldd $(which microsoft-edge)
 ```
 
 ---
 
 ## Advanced Usage
 
-### Run in Background (Detached)
+### Custom Dockerfile Modifications
 
-Edit `run.sh` and change:
-```bash
-docker run -it --rm \
-# To:
-docker run -d --rm \
+Edit `Dockerfile` to add additional packages:
+
+```dockerfile
+# Add before the final CMD line
+RUN apt-get update && \
+    apt-get install -y your-package && \
+    rm -rf /var/lib/apt/lists/*
 ```
 
-Then attach when needed:
+Then rebuild:
 ```bash
-docker attach edge-vpn-container
+./scripts/build.sh
 ```
 
-### Custom Network
+### Volume Mounting for Downloads
+
+The container mounts your entire home directory by default. Downloads from Edge will be saved to your host system's filesystem.
 
 ```bash
-# Create custom network
-docker network create edge-network
-
-# Edit run.sh, replace:
---network host
-# With:
---network edge-network
+# Inside container
+ubuntu@hostname:~$ cd ~/Downloads
+ubuntu@hostname:~/Downloads$ ls
+# Files here are accessible from host
 ```
 
-### Multiple Instances
+### Persistence Mode for GPU
+
+Enable NVIDIA persistence mode for faster container startup:
 
 ```bash
-# Copy and rename run.sh
-cp run.sh run-instance2.sh
+# Enable persistence mode (survives reboots)
+sudo nvidia-smi -pm 1
 
-# Edit run-instance2.sh, change:
---name edge-vpn-container
-# To:
---name edge-vpn-instance2
+# Verify
+nvidia-smi | grep "Persistence Mode"
 ```
 
----
+### Running Multiple Containers
 
-## Maintenance
+Each `./run.sh` execution creates a new container session. Only one can run at a time because they all use the name `cuda-container`.
 
-### Update Container
-
+To run multiple simultaneously, modify container name in `run.sh`:
 ```bash
-# Rebuild with latest packages
-docker build --no-cache -t edge-vpn .
-
-# Remove old images
-docker image prune
-```
-
-### Check Container Health
-
-```bash
-# View health status
-docker inspect --format='{{.State.Health.Status}}' edge-vpn-container
-
-# View logs
-docker logs edge-vpn-container
-
-# View resource usage
-docker stats edge-vpn-container
-```
-
-### Backup Configuration
-
-```bash
-# Backup Edge config
-tar czf edge-config-backup.tar.gz ~/.config/microsoft-edge-docker
-
-# Restore if needed
-tar xzf edge-config-backup.tar.gz -C ~/
+--name cuda-container-1
 ```
 
 ---
 
-## Documentation
+## Docker Hub Image
 
-- **[SECURITY_REVIEW.md](SECURITY_REVIEW.md)** - Complete security analysis
-- **[IMPROVEMENTS.md](IMPROVEMENTS.md)** - What was improved and why
-- **[DOWNLOADS_PERSISTENCE.md](DOWNLOADS_PERSISTENCE.md)** - Download configuration
+A pre-built image is available on Docker Hub:
+
+```bash
+# Pull pre-built image
+docker pull kairin/bases:edge-cuda13.0-ubuntu24.04
+
+# Tag for use with run.sh
+docker tag kairin/bases:edge-cuda13.0-ubuntu24.04 cuda-container
+
+# Now you can skip ./scripts/build.sh and go directly to:
+./scripts/run.sh
+```
+
+**Note:** Pre-built image may not be the latest version. Building locally ensures you get the latest Edge and security updates.
 
 ---
 
-## Verification
+## Project Structure
 
-### Test Complete Setup
-
-```bash
-# 1. Build succeeds
-docker build -t edge-vpn . && echo "✅ Build OK"
-
-# 2. Image exists
-docker images edge-vpn && echo "✅ Image OK"
-
-# 3. Run script works
-./run.sh &
-sleep 5
-docker ps | grep edge-vpn && echo "✅ Container running"
-
-# 4. Downloads persist
-docker exec edge-vpn-container touch ~/Downloads/test.txt
-[ -f ~/Downloads/test.txt ] && echo "✅ Downloads persist"
-rm ~/Downloads/test.txt
-
-# 5. Stop container
-docker stop edge-vpn-container && echo "✅ Test complete"
+```
+edge-vpn-container/
+├── README.md                    # This file - main documentation
+├── CLAUDE.md                    # LLM agent instructions (symlink)
+├── Dockerfile                   # Container image definition
+├── docs/                        # Historical documentation
+│   └── *.md                     # Security audits, migration guides
+├── logs/                        # Automatic logging (gitignored)
+│   ├── README.md                # Logging documentation
+│   ├── verify-host/             # Verification logs
+│   ├── docker-builds/           # Build logs
+│   └── container-sessions/      # Session logs
+└── scripts/                     # Executable workflow scripts
+    ├── verify-host.sh           # Pre-flight system verification
+    ├── build.sh                 # Image build script
+    └── run.sh                   # Container launcher
 ```
 
 ---
 
-## Support
+## Contributing
 
-For issues or improvements:
-1. Review troubleshooting section above
-2. Check documentation files
-3. Verify system requirements
-4. Review Docker logs: `docker logs edge-vpn-container`
+This is a personal project for running Microsoft Edge in a containerized environment with GPU acceleration. Feel free to fork and adapt for your needs.
 
 ---
 
 ## License
 
-This setup is provided as-is for personal use. Microsoft Edge and F5 VPN have their own licenses.
+This project is provided as-is for educational and personal use.
+
+---
+
+## Acknowledgments
+
+- **NVIDIA** - CUDA Deep Learning base images
+- **Microsoft** - Edge browser
+- **Docker** - Containerization platform
