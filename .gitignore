@@ -1,2 +1,8 @@
-# Verification logs
-logs/
+# Ignore actual log files (timestamped runs)
+logs/verify-host/20*/
+logs/docker-builds/build-*.md
+logs/container-sessions/session-*.md
+
+# Keep directory structure and documentation
+!logs/README.md
+!logs/*/README.md
