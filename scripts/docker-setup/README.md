@@ -1,67 +1,22 @@
 # Docker Setup Scripts
 
-Modular installation scripts for building the container image.
+Modular installation scripts used by Dockerfile to build the container image.
 
 ## Purpose
 
-These scripts break down the Docker image build process into independent, testable components. Each script handles one specific aspect of the installation.
+Break down Docker image build into independent, test able components. Each script handles one installation step.
 
 ## Scripts
 
-### 1. `install-base.sh` - Base System Dependencies
+| Script | Installs | Purpose |
+|--------|----------|---------|
+| `install-base.sh` | curl, gnupg, ca-certificates, apt-transport-https | Package management tools |
+| `install-gpu-libs.sh` | libgl1, libegl1 | OpenGL/EGL for GPU rendering |
+| `install-edge.sh` | microsoft-edge-stable | Microsoft Edge browser |
 
-**Purpose:** Install essential package management tools
+## How It Works
 
-**Installs:**
-- `curl` - Download files from URLs
-- `gnupg` - GPG key verification
-- `ca-certificates` - SSL/TLS certificate authorities
-- `apt-transport-https` - HTTPS support for apt
-
-**When to modify:**
-- Need additional package management tools
-- Adding new repository types
-
----
-
-### 2. `install-gpu-libs.sh` - GPU Rendering Libraries
-
-**Purpose:** Install OpenGL and EGL libraries for hardware-accelerated graphics
-
-**Installs:**
-- `libgl1` - OpenGL library (3D graphics API)
-- `libegl1` - EGL library (GPU rendering interface)
-
-**When to modify:**
-- Need additional GPU libraries
-- Adding Vulkan or other graphics APIs
-- Supporting different GPU vendors
-
----
-
-### 3. `install-edge.sh` - Microsoft Edge Browser
-
-**Purpose:** Install Microsoft Edge stable from official Microsoft repository
-
-**Steps:**
-1. Add Microsoft GPG key
-2. Add Microsoft Edge apt repository
-3. Install `microsoft-edge-stable` package
-4. Verify installation succeeded
-
-**When to modify:**
-- Want different Edge channel (beta, dev, canary)
-- Need to install browser extensions
-- Want to switch to different browser (Chrome, Firefox)
-
----
-
-## Usage
-
-### During Docker Build
-
-The Dockerfile automatically uses these scripts:
-
+**Dockerfile uses them:**
 ```dockerfile
 COPY scripts/docker-setup/ /tmp/docker-setup/
 
@@ -72,9 +27,13 @@ RUN chmod +x /tmp/docker-setup/*.sh && \
     rm -rf /tmp/docker-setup
 ```
 
-### Testing Scripts Independently
+Each script:
+1. Installs packages
+2. Cleans up apt cache
+3. Verifies installation
+4. Reports success/failure
 
-Test a script before building the full image:
+## Testing Individual Scripts
 
 ```bash
 # Test script syntax
@@ -82,186 +41,87 @@ bash -n scripts/docker-setup/install-edge.sh
 
 # Test in temporary container
 docker run --rm -v "$PWD/scripts/docker-setup:/scripts" \
-    ubuntu:24.04 \
-    bash /scripts/install-base.sh
+    ubuntu:24.04 bash /scripts/install-base.sh
 ```
 
-### Disabling Components
-
-Comment out scripts you don't need in the Dockerfile:
-
-```dockerfile
-RUN chmod +x /tmp/docker-setup/*.sh && \
-    /tmp/docker-setup/install-base.sh && \
-    /tmp/docker-setup/install-gpu-libs.sh && \
-    # /tmp/docker-setup/install-edge.sh && \    # ← Disabled
-    rm -rf /tmp/docker-setup
-```
-
----
-
-## Adding New Components
-
-### Example: Adding VPN Client
+## Adding Components
 
 **1. Create new script:**
-```bash
-vim scripts/docker-setup/install-vpn.sh
-```
-
-**2. Script template:**
 ```bash
 #!/bin/bash
 set -euo pipefail
 
-echo "Installing F5 VPN client..."
+echo "Installing something..."
 
-# Your installation commands here
-wget https://example.com/vpn-client.deb
-dpkg -i vpn-client.deb || apt-get install -f -y
+apt-get update
+apt-get install -y --no-install-recommends your-package
+rm -rf /var/lib/apt/lists/*
 
-# Verify installation
-if command -v vpn-client &> /dev/null; then
-    echo "✓ VPN client installed successfully"
-else
-    echo "✗ VPN client installation failed!"
-    exit 1
-fi
+echo "✓ Installation successful"
 ```
 
-**3. Make executable:**
+**2. Make executable:**
 ```bash
-chmod +x scripts/docker-setup/install-vpn.sh
+chmod +x scripts/docker-setup/install-something.sh
 ```
 
-**4. Add to Dockerfile:**
+**3. Add to Dockerfile:**
 ```dockerfile
 RUN chmod +x /tmp/docker-setup/*.sh && \
     /tmp/docker-setup/install-base.sh && \
     /tmp/docker-setup/install-gpu-libs.sh && \
     /tmp/docker-setup/install-edge.sh && \
-    /tmp/docker-setup/install-vpn.sh && \    # ← New
+    /tmp/docker-setup/install-something.sh && \    # Add this line
     rm -rf /tmp/docker-setup
 ```
 
-**5. Rebuild:**
+**4. Rebuild:**
 ```bash
 ./scripts/build.sh
 ```
 
----
+## Removing Components
+
+Comment out the line in Dockerfile:
+
+```dockerfile
+RUN chmod +x /tmp/docker-setup/*.sh && \
+    /tmp/docker-setup/install-base.sh && \
+    /tmp/docker-setup/install-gpu-libs.sh && \
+    # /tmp/docker-setup/install-edge.sh && \    # Disabled
+    rm -rf /tmp/docker-setup
+```
 
 ## Script Guidelines
 
-### Required Elements
-
 Every script should:
 
-✅ **Start with shebang and set options:**
 ```bash
 #!/bin/bash
-set -euo pipefail
+set -euo pipefail  # Exit on error, undefined vars, pipe failures
+
+echo "Installing something..."  # Print what it's doing
+
+# Installation commands here
+
+rm -rf /var/lib/apt/lists/*  # Clean up
+
+echo "✓ Installation successful"  # Report success
 ```
-
-✅ **Print what it's doing:**
-```bash
-echo "Installing something..."
-```
-
-✅ **Clean up after itself:**
-```bash
-rm -rf /var/lib/apt/lists/*
-```
-
-✅ **Verify installation:**
-```bash
-if command -v something &> /dev/null; then
-    echo "✓ Installation successful"
-else
-    echo "✗ Installation failed!"
-    exit 1
-fi
-```
-
-### Best Practices
-
-- 📝 **Add comments** explaining what each section does
-- 🧹 **Clean up** temporary files and apt cache
-- ✅ **Verify** installation succeeded before continuing
-- 📊 **Print versions** of installed software
-- ⚠️ **Exit with error** if installation fails
-
----
-
-## Troubleshooting
-
-### Script fails during build
-
-**Check which script failed:**
-```
-Step 5/6 : RUN chmod +x /tmp/docker-setup/*.sh && ...
- ---> Running in abc123
-=== Installing Base Dependencies ===
-✓ Base dependencies installed successfully
-=== Installing GPU Libraries ===
-✗ Installation failed!
-```
-
-**Test the failing script:**
-```bash
-# Run in temporary container
-docker run --rm -it \
-    nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04 \
-    bash
-
-# Inside container
-apt-get update
-# Manually run commands from the script
-```
-
-### Script works on host but fails in container
-
-- Container may have different base packages installed
-- Check script uses absolute paths, not relative
-- Verify all dependencies are in `install-base.sh`
-
-### Want to modify script after build
-
-1. Edit the script file
-2. Rebuild the image: `./scripts/build.sh`
-3. Docker will use updated script
-
----
 
 ## Benefits
 
-### ✅ Modularity
-- Each component in separate file
-- Easy to add/remove/modify
-
-### ✅ Testability
-- Test scripts before Docker build
-- Debug independently
-
-### ✅ Maintainability
-- Clear what each script does
-- Easy to update single component
-
-### ✅ Reusability
-- Use scripts outside Docker
-- Share across projects
-
-### ✅ Flexibility
-- Comment out what you don't need
-- Easy to customize
-
----
+**Testable:** Test individual scripts before Docker build
+**Maintainable:** Clear separation of concerns
+**Extensible:** Easy to add new components
+**Flexible:** Comment out what you don't need
+**Debuggable:** See which specific script failed
 
 ## Examples
 
-### Switching from Edge to Chrome
+### Switch from Edge to Chrome
 
-**1. Create `install-chrome.sh`:**
+Create `install-chrome.sh`:
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -271,29 +131,22 @@ echo "Installing Google Chrome..."
 curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | \
     gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
 
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > \
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] \
+    http://dl.google.com/linux/chrome/deb/ stable main" > \
     /etc/apt/sources.list.d/google-chrome.list
 
 apt-get update
 apt-get install -y --no-install-recommends google-chrome-stable
 rm -rf /var/lib/apt/lists/*
 
-echo "✓ Google Chrome installed successfully"
+echo "✓ Google Chrome installed"
 ```
 
-**2. Update Dockerfile:**
-```dockerfile
-RUN chmod +x /tmp/docker-setup/*.sh && \
-    /tmp/docker-setup/install-base.sh && \
-    /tmp/docker-setup/install-gpu-libs.sh && \
-    # /tmp/docker-setup/install-edge.sh && \    # Disabled
-    /tmp/docker-setup/install-chrome.sh && \    # Added
-    rm -rf /tmp/docker-setup
-```
+Update Dockerfile to use `install-chrome.sh` instead of `install-edge.sh`.
 
-### Adding Video Codecs
+### Add Video Codecs
 
-**Create `install-codecs.sh`:**
+Create `install-codecs.sh`:
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -308,15 +161,7 @@ apt-get install -y --no-install-recommends \
     vainfo
 rm -rf /var/lib/apt/lists/*
 
-echo "✓ Video codecs installed successfully"
+echo "✓ Video codecs installed"
 ```
 
-**Add to Dockerfile after GPU libs.**
-
----
-
-## See Also
-
-- [Main README](../../README.md) - Project overview
-- [Build Script](../build.sh) - How images are built
-- [Dockerfile](../../Dockerfile) - How scripts are used
+Add to Dockerfile after GPU libs.

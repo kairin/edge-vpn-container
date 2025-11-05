@@ -1,108 +1,60 @@
 # Host Verification Logs
 
-This directory contains logs from the host verification script (`verify-host.sh`).
+Timestamped directories containing results from `./scripts/verify-host.sh` runs.
 
-## Purpose
+## Structure
 
-Verify that your host system is properly configured before running the container:
-- X11 display server accessibility
-- Docker installation and permissions
-- NVIDIA GPU detection and capabilities
-- NVIDIA Docker runtime availability
+Each verification run creates one timestamped directory:
 
-## Log Files
-
-**Format:** Markdown (`.md`)
-**Naming:** `verify-host-YYYY-MM-DD_HH-MM-SS.md`
-**Example:** `verify-host-2025-11-05_15-54-47.md`
+```
+logs/verify-host/
+└── 2025-11-05_15-54-47/              # One directory per run
+    ├── 01-check-display.md            # DISPLAY variable check
+    ├── 02-check-x11.md                # X11 socket accessibility
+    ├── 03-check-xhost.md              # xhost access control
+    ├── 04-check-docker.md             # Docker installation & permissions
+    ├── 05-check-nvidia-gpu.md         # GPU detection & capabilities
+    ├── 06-check-nvidia-runtime.md     # NVIDIA Docker runtime
+    ├── 07-enable-persistence-mode.md  # Persistence mode setup
+    └── summary.md                     # Combined summary with links
+```
 
 ## What's Logged
 
-Each log contains:
-- ✅ DISPLAY variable status
-- ✅ X11 socket accessibility
-- ✅ xhost access control configuration
-- ✅ Docker availability and permissions
-- ✅ Full `nvidia-smi` output
-- ✅ GPU information summary (model, driver, CUDA version, temperature, memory)
-- ✅ NVIDIA capabilities (NVENC, NVDEC, compute, display, persistence mode)
-- ✅ NVIDIA Docker runtime status
+Each check creates individual markdown log containing:
+- Check name and purpose
+- Timestamp
+- Detailed results with status indicators (✓/✗/⚠)
+- Resolution steps if failed
 
-## Usage
+**summary.md** provides:
+- Overall status (pass/warnings/errors)
+- Links to all individual check logs
+- Quick navigation
+
+## Common Commands
 
 ```bash
-# Run verification (generates new log)
-./scripts/verify-host.sh
+# View latest verification
+cat $(ls -t logs/verify-host/*/summary.md | head -1)
 
-# View most recent log
-cat $(ls -t logs/verify-host/*.md | head -1)
+# View specific check from latest run
+cat $(find logs/verify-host -name "05-check-nvidia-gpu.md" | sort | tail -1)
 
-# View in markdown viewer
-glow $(ls -t logs/verify-host/*.md | head -1)
-
-# Search all verification logs for errors
-grep -i "error\|warning" logs/verify-host/*.md
+# Find all failed checks
+grep -r "✗" logs/verify-host/*/0*.md
 ```
 
-## Log Structure
+## When Generated
 
-```markdown
-# Host Display Configuration Verification
-
-**Generated:** [timestamp]
-**Log File:** `logs/verify-host/verify-host-YYYY-MM-DD_HH-MM-SS.md`
-
----
-
-## Verification Results
-
-1. Checking DISPLAY variable...
-✓ DISPLAY is set: :0
-
-2. Checking X11 socket files...
-✓ Found 2 X11 socket(s)
-
-3. Checking xhost access control...
-✓ Access control is enabled
-
-4. Checking Docker...
-✓ Docker is installed
-
-5. Checking NVIDIA GPU...
-✓ nvidia-smi is available
-[Full nvidia-smi output]
-[GPU Information Summary]
-[NVIDIA Capabilities]
-
-6. Checking NVIDIA Docker runtime...
-✓ NVIDIA runtime is available
-
----
-
-**Verification completed at:** [timestamp]
-```
-
-## When to Run
-
-Run verification:
-- **Before first container launch** - Ensure system is ready
-- **After driver updates** - Confirm NVIDIA drivers still work
-- **When troubleshooting** - Document system state
-- **After system configuration changes** - Verify nothing broke
+Created by `./scripts/verify-host.sh` which runs before building the image or when troubleshooting system configuration.
 
 ## Cleanup
 
 ```bash
-# Delete logs older than 30 days
-find logs/verify-host -name "*.md" -mtime +30 -delete
+# Delete runs older than 30 days
+find logs/verify-host -type d -name "20*" -mtime +30 -exec rm -rf {} +
 
-# Keep only the 20 most recent logs
-ls -t logs/verify-host/*.md | tail -n +21 | xargs rm -f
+# Keep only 20 most recent runs
+ls -t logs/verify-host/ -d | tail -n +21 | xargs rm -rf
 ```
-
-## Benefits
-
-- 📊 **System health snapshots** at different points in time
-- 🐛 **Troubleshooting** with complete system information
-- 📈 **Track changes** in GPU utilization, temperature, driver versions
-- 📝 **Documentation** for support requests or team sharing

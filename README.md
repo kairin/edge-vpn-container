@@ -1,426 +1,129 @@
 # Edge VPN Container
 
-Containerized Microsoft Edge browser with NVIDIA GPU acceleration, built on CUDA Deep Learning base image (Ubuntu 24.04).
+Containerized Microsoft Edge browser with NVIDIA GPU acceleration. Built on modular architecture for easy maintenance and testing.
+
+## Current Status
+
+✅ **Working:**
+- Microsoft Edge in Docker container
+- NVIDIA GPU hardware acceleration
+- Modular build system (docker-setup/)
+- Modular verification system (host-checks/)
+- Comprehensive logging for all operations
+- Three-step workflow (verify → build → run)
+
+🚧 **Future:**
+- F5 VPN client integration (deferred)
+
+---
 
 ## Quick Start
 
 ```bash
-# Step 1: Verify host system prerequisites
+# 1. Verify system ready
 ./scripts/verify-host.sh
 
-# Step 2: Build the Docker image
+# 2. Build image (first time only)
 ./scripts/build.sh
 
-# Step 3: Run the container
+# 3. Run container
 ./scripts/run.sh
+
+# Inside container:
+microsoft-edge --no-sandbox
 ```
+
+---
+
+## Goals & Decisions
+
+### Primary Goal
+Run Microsoft Edge browser in isolated Docker container with full GPU acceleration.
+
+### Architecture Decisions
+
+**Modular Design**
+- Separated Docker build into independent scripts (`scripts/docker-setup/`)
+- Separated host verification into independent checks (`scripts/host-checks/`)
+- Each component testable independently
+- Easy to add/remove/modify components
+
+**Comprehensive Logging**
+- All operations automatically logged to timestamped markdown files
+- Logs grouped by type: verification, builds, sessions
+- Clean format (ANSI codes stripped)
+- Individual logs + summary for each run
+
+**Three-Step Workflow**
+- **Verify** host prerequisites before building
+- **Build** image once with modular installation scripts
+- **Run** container multiple times with session logging
+
+**NVIDIA CUDA Base**
+- Switched from plain Ubuntu to NVIDIA CUDA Deep Learning base
+- Provides GPU acceleration out of the box
+- Includes cuDNN, NCCL, TensorRT
+
+---
 
 ## System Requirements
 
-### Host System
-- **OS**: Linux with X11 or Wayland display server
-- **Docker**: Version 20.10+ with NVIDIA Container Toolkit
-- **NVIDIA GPU**: Any CUDA-capable GPU
-- **NVIDIA Driver**: Version 535+ (CUDA 13.0 compatible)
-- **Display**: X11 socket accessible at `/tmp/.X11-unix`
+**Host:**
+- Linux with X11 display server
+- Docker 20.10+ with NVIDIA Container Toolkit
+- NVIDIA GPU (CUDA-capable)
+- NVIDIA Driver 535+
 
-### Tested Configuration
-- OS: Ubuntu 25.10 (Oracular Oriole)
-- Docker: 28.5.1
-- NVIDIA Driver: 580.95.05
-- GPU: NVIDIA GeForce RTX 4080 SUPER (16GB VRAM)
-- Display: Wayland with X11 compatibility
+**Tested:**
+- Ubuntu 25.10, Docker 28.5.1, Driver 580.95.05
+- NVIDIA GeForce RTX 4080 SUPER
+
+---
 
 ## Three-Step Workflow
 
-### 1. Pre-Flight Verification: `scripts/verify-host.sh`
+### 1. Verify Host (`./scripts/verify-host.sh`)
 
-**Purpose:** Verify host system is properly configured before building or running container.
+Checks system prerequisites:
+- DISPLAY variable, X11 sockets, xhost
+- Docker installation and permissions
+- NVIDIA GPU detection and capabilities
+- NVIDIA Docker runtime
 
-**What it checks:**
-- ✅ DISPLAY environment variable
-- ✅ X11 socket accessibility (`/tmp/.X11-unix`)
-- ✅ xhost access control configuration
-- ✅ Docker installation and permissions
-- ✅ NVIDIA GPU detection and status
-- ✅ NVIDIA capabilities (NVENC, NVDEC, compute, persistence mode)
-- ✅ NVIDIA Docker runtime availability
+**Logs:** `logs/verify-host/<timestamp>/`
+- Individual check logs (01-check-display.md, etc.)
+- summary.md with links to all checks
 
-**Logging:**
-- Location: `logs/verify-host/verify-host-YYYY-MM-DD_HH-MM-SS.md`
-- Format: Markdown with complete verification output
-- Contains: All checks, GPU information, system status
-
-**When to run:**
-- Before first build
-- After driver updates
-- When troubleshooting display or GPU issues
-- After system configuration changes
-
-```bash
-./scripts/verify-host.sh
-```
-
-**Expected output:**
-```
-========================================
-Host Display Configuration Verification
-========================================
-✓ DISPLAY is set: :0
-✓ Found 2 X11 socket(s)
-✓ Access control is enabled
-✓ Docker is installed
-✓ nvidia-smi is available
-✓ NVIDIA runtime is available
-========================================
-✓ All checks passed!
-Your system is ready to run the container.
-Execute: ./scripts/build.sh
-========================================
-```
+**Run:** Before first build, after driver updates, when troubleshooting
 
 ---
 
-### 2. Image Build: `scripts/build.sh`
+### 2. Build Image (`./scripts/build.sh`)
 
-**Purpose:** Build the Docker image with NVIDIA CUDA base and Microsoft Edge.
+Builds Docker image using modular scripts:
+- `install-base.sh` - System dependencies (curl, gnupg, ca-certificates)
+- `install-gpu-libs.sh` - GPU libraries (libgl1, libegl1)
+- `install-edge.sh` - Microsoft Edge stable
 
-**What it does:**
-- Pulls NVIDIA CUDA Deep Learning base image (~4.5 GB)
-- Installs Microsoft Edge stable and dependencies
-- Installs OpenGL/EGL libraries for GPU rendering
-- Creates `cuda-container` image
+**Logs:** `logs/docker-builds/build-<timestamp>.md`
 
-**Logging:**
-- Location: `logs/docker-builds/build-YYYY-MM-DD_HH-MM-SS.md`
-- Format: Markdown with complete build output
-- Contains: All Docker layers, downloads, package installations
+**Run:** First time, after Dockerfile changes, to update packages
 
-**Build time:** ~5-10 minutes (depending on network speed)
-
-**When to run:**
-- First time setup
-- After Dockerfile changes
-- To update to latest NVIDIA base image
-- To upgrade Microsoft Edge version
-
-```bash
-./scripts/build.sh
-```
-
-**Expected output:**
-```
-Building cuda-container image...
-Build process will be logged to: logs/docker-builds/build-2025-11-05_16-30-00.md
-
-[Docker build output...]
-
-========================================
-Build completed successfully!
-Build log saved to: logs/docker-builds/build-2025-11-05_16-30-00.md
-========================================
-
-You can now run ./scripts/run.sh to launch the container
-```
+**Time:** ~5-10 minutes
 
 ---
 
-### 3. Container Launch: `scripts/run.sh`
+### 3. Run Container (`./scripts/run.sh`)
 
-**Purpose:** Launch the containerized Edge browser with GPU acceleration and X11 forwarding.
+Launches container with:
+- NVIDIA runtime for GPU access
+- X11 forwarding for display
+- Home directory mounted (read-write)
+- CUDA optimizations (SHMEM, memory locking)
 
-**What it does:**
-- Verifies `cuda-container` image exists
-- Runs container with NVIDIA runtime
-- Mounts X11 sockets for GUI display
-- Mounts home directory for file access
-- Configures CUDA optimizations (SHMEM, memory locking)
-- Logs complete container session
+**Logs:** `logs/container-sessions/session-<timestamp>.md`
 
-**Logging:**
-- Location: `logs/container-sessions/session-YYYY-MM-DD_HH-MM-SS.md`
-- Format: Markdown with complete session output
-- Contains: All commands typed, outputs, timestamps
-
-**Container Configuration:**
-- Runtime: NVIDIA (`--runtime=nvidia`)
-- User: Non-root (matches host UID:GID)
-- Network: Host network mode
-- IPC: Host IPC namespace (for CUDA SHMEM)
-- Display: X11 forwarding via mounted socket
-- Volumes: Home directory (read-write)
-
-**When to run:**
-- After successful build
-- Every time you want to use the browser
-- For testing and validation
-
-```bash
-./scripts/run.sh
-```
-
-**Expected output:**
-```
-Launching container...
-Session will be logged to: logs/container-sessions/session-2025-11-05_16-35-00.md
-
-[Container starts, you get shell prompt]
-ubuntu@hostname:~$ microsoft-edge --no-sandbox
-[Edge browser launches]
-ubuntu@hostname:~$ exit
-
-========================================
-Session log saved to: logs/container-sessions/session-2025-11-05_16-35-00.md
-========================================
-```
-
----
-
-## Complete Setup Example
-
-```bash
-# Clone or download this repository
-cd /path/to/edge-vpn-container
-
-# Step 1: Verify your system is ready
-./scripts/verify-host.sh
-# → logs/verify-host/verify-host-2025-11-05_15-00-00.md
-
-# Step 2: Build the Docker image (one-time setup)
-./scripts/build.sh
-# → logs/docker-builds/build-2025-11-05_15-05-00.md
-# This takes 5-10 minutes
-
-# Step 3: Run the container
-./scripts/run.sh
-# → logs/container-sessions/session-2025-11-05_15-15-00.md
-
-# Inside the container, launch Edge
-ubuntu@hostname:~$ microsoft-edge --no-sandbox
-
-# When done, exit the container
-ubuntu@hostname:~$ exit
-```
-
----
-
-## Container Technical Details
-
-### Base Image
-- **Image**: `nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04`
-- **OS**: Ubuntu 24.04.3 LTS (Noble Numbat)
-- **CUDA**: 13.0.88
-- **cuDNN**: 9.14
-- **NCCL**: 2.27
-- **TensorRT**: 10.13
-
-### Installed Software
-- Microsoft Edge Stable (latest)
-- OpenGL libraries (libgl1, libegl1)
-- CUDA runtime libraries
-
-### Security Features
-- Non-root user (matches host UID/GID)
-- Resource limits configured
-- Default seccomp profile enabled
-- No unnecessary capabilities granted
-
-### GPU Access
-- Full NVIDIA GPU passthrough via `--runtime=nvidia`
-- Hardware video encoding (NVENC)
-- Hardware video decoding (NVDEC)
-- CUDA compute capabilities
-- OpenGL/EGL rendering
-
----
-
-## Logging System
-
-All three scripts automatically log their complete output to timestamped markdown files:
-
-```
-logs/
-├── verify-host/           # Host verification logs
-│   └── verify-host-*.md   # System check results
-├── docker-builds/         # Image build logs
-│   └── build-*.md         # Docker build output
-└── container-sessions/    # Container session logs
-    └── session-*.md       # Everything that happens inside container
-```
-
-### View Logs
-
-```bash
-# View most recent verification
-cat $(ls -t logs/verify-host/*.md | head -1)
-
-# View most recent build
-cat $(ls -t logs/docker-builds/*.md | head -1)
-
-# View most recent session
-cat $(ls -t logs/container-sessions/*.md | head -1)
-```
-
-### Log Cleanup
-
-```bash
-# Delete logs older than 30 days
-find logs -name "*.md" -mtime +30 -delete
-
-# Keep only 10 most recent of each type
-ls -t logs/verify-host/*.md | tail -n +11 | xargs rm -f
-ls -t logs/docker-builds/*.md | tail -n +11 | xargs rm -f
-ls -t logs/container-sessions/*.md | tail -n +11 | xargs rm -f
-```
-
-See [logs/README.md](logs/README.md) for detailed documentation.
-
----
-
-## Troubleshooting
-
-### Build Issues
-
-**Problem:** Docker build fails with network errors
-```bash
-# Check internet connectivity
-curl -I https://packages.microsoft.com
-
-# Try build again (Docker caches successful layers)
-./scripts/build.sh
-```
-
-**Problem:** Permission denied during build
-```bash
-# Ensure user is in docker group
-sudo usermod -aG docker $USER
-# Log out and back in for changes to take effect
-```
-
-### Display Issues
-
-**Problem:** Container can't access display
-```bash
-# Check DISPLAY variable
-echo $DISPLAY
-
-# Enable X11 access for Docker
-xhost +local:docker
-
-# Verify with verification script
-./scripts/verify-host.sh
-```
-
-**Problem:** "No protocol specified" error
-```bash
-# This means xhost access control is blocking Docker
-xhost +local:docker
-```
-
-### GPU Issues
-
-**Problem:** GPU not detected in container
-```bash
-# Verify NVIDIA runtime is installed
-docker info | grep -i nvidia
-
-# Test GPU access
-docker run --runtime=nvidia --rm nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04 nvidia-smi
-```
-
-**Problem:** "nvidia-smi: command not found"
-```bash
-# Install NVIDIA drivers on host
-# Ubuntu: sudo ubuntu-drivers autoinstall
-
-# Install NVIDIA Container Toolkit
-# See: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-```
-
-### Edge Browser Issues
-
-**Problem:** Edge doesn't launch or crashes
-```bash
-# Inside container, check Edge installation
-dpkg -l | grep edge
-
-# Try launching with verbose output
-microsoft-edge --no-sandbox --verbose
-
-# Check for missing libraries
-ldd $(which microsoft-edge)
-```
-
----
-
-## Advanced Usage
-
-### Custom Dockerfile Modifications
-
-Edit `Dockerfile` to add additional packages:
-
-```dockerfile
-# Add before the final CMD line
-RUN apt-get update && \
-    apt-get install -y your-package && \
-    rm -rf /var/lib/apt/lists/*
-```
-
-Then rebuild:
-```bash
-./scripts/build.sh
-```
-
-### Volume Mounting for Downloads
-
-The container mounts your entire home directory by default. Downloads from Edge will be saved to your host system's filesystem.
-
-```bash
-# Inside container
-ubuntu@hostname:~$ cd ~/Downloads
-ubuntu@hostname:~/Downloads$ ls
-# Files here are accessible from host
-```
-
-### Persistence Mode for GPU
-
-Enable NVIDIA persistence mode for faster container startup:
-
-```bash
-# Enable persistence mode (survives reboots)
-sudo nvidia-smi -pm 1
-
-# Verify
-nvidia-smi | grep "Persistence Mode"
-```
-
-### Running Multiple Containers
-
-Each `./run.sh` execution creates a new container session. Only one can run at a time because they all use the name `cuda-container`.
-
-To run multiple simultaneously, modify container name in `run.sh`:
-```bash
---name cuda-container-1
-```
-
----
-
-## Docker Hub Image
-
-A pre-built image is available on Docker Hub:
-
-```bash
-# Pull pre-built image
-docker pull kairin/bases:edge-cuda13.0-ubuntu24.04
-
-# Tag for use with run.sh
-docker tag kairin/bases:edge-cuda13.0-ubuntu24.04 cuda-container
-
-# Now you can skip ./scripts/build.sh and go directly to:
-./scripts/run.sh
-```
-
-**Note:** Pre-built image may not be the latest version. Building locally ensures you get the latest Edge and security updates.
+**Run:** Every time you want to use the browser
 
 ---
 
@@ -428,33 +131,159 @@ docker tag kairin/bases:edge-cuda13.0-ubuntu24.04 cuda-container
 
 ```
 edge-vpn-container/
-├── README.md                    # This file - main documentation
-├── CLAUDE.md                    # LLM agent instructions (symlink)
-├── Dockerfile                   # Container image definition
-├── docs/                        # Historical documentation
-│   └── *.md                     # Security audits, migration guides
-├── logs/                        # Automatic logging (gitignored)
-│   ├── README.md                # Logging documentation
-│   ├── verify-host/             # Verification logs
-│   ├── docker-builds/           # Build logs
-│   └── container-sessions/      # Session logs
-└── scripts/                     # Executable workflow scripts
-    ├── verify-host.sh           # Pre-flight system verification
-    ├── build.sh                 # Image build script
-    └── run.sh                   # Container launcher
+├── README.md                        # This file
+├── Dockerfile                       # Modular build using scripts/docker-setup/
+├── scripts/
+│   ├── verify-host.sh              # Orchestrates all host checks
+│   ├── build.sh                     # Builds Docker image with logging
+│   ├── run.sh                       # Launches container with logging
+│   ├── host-checks/                 # Modular verification scripts
+│   │   ├── check-display.sh
+│   │   ├── check-x11.sh
+│   │   ├── check-xhost.sh
+│   │   ├── check-docker.sh
+│   │   ├── check-nvidia-gpu.sh
+│   │   ├── check-nvidia-runtime.sh
+│   │   ├── enable-persistence-mode.sh
+│   │   └── README.md
+│   └── docker-setup/                # Modular installation scripts
+│       ├── install-base.sh
+│       ├── install-gpu-libs.sh
+│       ├── install-edge.sh
+│       └── README.md
+├── logs/                            # Auto-generated (gitignored)
+│   ├── verify-host/<timestamp>/    # Verification runs
+│   ├── docker-builds/build-*.md    # Build outputs
+│   ├── container-sessions/session-*.md  # Session recordings
+│   └── README.md                    # Logs documentation
+└── docs/                            # Session notes and backups
 ```
 
 ---
 
-## Contributing
+## Technical Details
 
-This is a personal project for running Microsoft Edge in a containerized environment with GPU acceleration. Feel free to fork and adapt for your needs.
+**Base Image:** `nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04`
+- Ubuntu 24.04.3 LTS
+- CUDA 13.0.88, cuDNN 9.14, NCCL 2.27, TensorRT 10.13
+
+**Installed:** Microsoft Edge Stable, OpenGL/EGL libraries
+
+**Container Config:**
+- Runtime: NVIDIA (`--runtime=nvidia`)
+- User: Non-root (matches host UID:GID)
+- Network: Host mode
+- IPC: Host namespace (for CUDA SHMEM)
+- Display: X11 forwarding
+
+**GPU Access:** NVENC, NVDEC, CUDA compute, OpenGL/EGL rendering
+
+---
+
+## Modular Architecture Benefits
+
+### Docker Build Modules (`scripts/docker-setup/`)
+✅ Test individual installation scripts independently
+✅ Add/remove components by commenting one line
+✅ Easy to swap browsers (Chrome, Firefox)
+✅ Clear separation of concerns
+
+### Host Verification Modules (`scripts/host-checks/`)
+✅ Run specific checks for debugging
+✅ Add custom checks without touching existing
+✅ Each check logs to individual file
+✅ Orchestrator continues even if one check fails
+
+### Comprehensive Logging
+✅ Complete audit trail of all operations
+✅ Debug issues after they occur
+✅ Timestamped directory per verification run
+✅ Individual logs + summary for easy navigation
+
+---
+
+## Common Commands
+
+### View Recent Logs
+```bash
+# Latest verification
+cat $(ls -t logs/verify-host/*/summary.md | head -1)
+
+# Latest build
+cat $(ls -t logs/docker-builds/*.md | head -1)
+
+# Latest session
+cat $(ls -t logs/container-sessions/*.md | head -1)
+```
+
+### Test Individual Components
+```bash
+# Test specific host check
+./scripts/host-checks/check-nvidia-gpu.sh
+
+# Test Docker installation script
+docker run --rm -v "$PWD/scripts/docker-setup:/scripts" \
+    ubuntu:24.04 bash /scripts/install-base.sh
+```
+
+### Enable Persistence Mode
+```bash
+# Recommended for faster container startup
+./scripts/host-checks/enable-persistence-mode.sh
+```
+
+---
+
+## Troubleshooting
+
+### Display Issues
+```bash
+# Enable X11 access for Docker
+xhost +local:docker
+
+# Verify
+./scripts/verify-host.sh
+```
+
+### GPU Issues
+```bash
+# Check NVIDIA runtime
+docker info | grep -i nvidia
+
+# Test GPU in container
+docker run --runtime=nvidia --rm \
+    nvcr.io/nvidia/cuda-dl-base:25.10-cuda13.0-runtime-ubuntu24.04 \
+    nvidia-smi
+```
+
+### Build Issues
+```bash
+# Check internet connectivity
+curl -I https://packages.microsoft.com
+
+# Rebuild (Docker caches successful layers)
+./scripts/build.sh
+```
+
+See individual component READMEs for detailed troubleshooting:
+- [scripts/host-checks/README.md](scripts/host-checks/README.md)
+- [scripts/docker-setup/README.md](scripts/docker-setup/README.md)
+- [logs/README.md](logs/README.md)
+
+---
+
+## Documentation
+
+- **[.github/BRANCH_NAMING.md](.github/BRANCH_NAMING.md)** - Branch naming convention
+- **[scripts/host-checks/README.md](scripts/host-checks/README.md)** - Host verification modules
+- **[scripts/docker-setup/README.md](scripts/docker-setup/README.md)** - Docker build modules
+- **[logs/README.md](logs/README.md)** - Logging system documentation
 
 ---
 
 ## License
 
-This project is provided as-is for educational and personal use.
+This project is provided as-is for personal use.
 
 ---
 

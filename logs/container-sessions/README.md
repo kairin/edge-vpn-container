@@ -1,36 +1,31 @@
 # Container Session Logs
 
-This directory contains complete terminal session recordings from Docker container runs.
+Timestamped markdown files recording complete terminal sessions inside the container.
 
-## Purpose
+## Structure
 
-Automatically record everything that happens inside the container for:
-- Debugging issues after they occur
-- Documentation of what was tested
-- Reproducibility of commands and results
-- Audit trail of container activity
+One log file per container session:
 
-## Log Files
-
-**Format:** Markdown (`.md`)
-**Naming:** `session-YYYY-MM-DD_HH-MM-SS.md`
-**Example:** `session-2025-11-05_16-02-04.md`
+```
+logs/container-sessions/
+└── session-2025-11-05_16-35-00.md    # Complete session recording
+```
 
 ## What's Logged
 
-Each session log captures:
-- ✅ All commands typed inside the container
-- ✅ All command outputs (stdout and stderr)
-- ✅ Container startup messages (CUDA banner, etc.)
-- ✅ Session start and end timestamps
-- ✅ Container exit status
+Each session log captures everything from container start to exit:
+- Container startup messages
+- All commands typed
+- All command outputs (stdout and stderr)
+- Session start and end timestamps
+- Container exit status
 
-## Log Structure
+## Format
 
 ```markdown
 # Container Session Log
 
-**Started:** Wed Nov  5 16:00:00 +08 2025
+**Started:** Wed Nov 5 16:35:00 +08 2025
 **Container:** cuda-container
 **User:** kkk (1000:1000)
 **Display:** :0
@@ -45,76 +40,51 @@ Each session log captures:
 
 ---
 
-**Ended:** Wed Nov  5 16:05:30 +08 2025
+**Ended:** Wed Nov 5 16:40:30 +08 2025
 ```
 
-## Usage
+## Common Commands
 
 ```bash
-# View most recent session
+# View latest session
 cat $(ls -t logs/container-sessions/*.md | head -1)
 
-# View in markdown viewer
-glow $(ls -t logs/container-sessions/*.md | head -1)
+# Find sessions with errors
+grep -i "error\|failed" logs/container-sessions/*.md
 
-# Search for specific commands
-grep "nvidia-smi" logs/container-sessions/session-*.md
-
-# Search for errors
-grep -i "error\|failed" logs/container-sessions/session-*.md
-
-# Extract just commands (lines starting with ubuntu@)
+# Extract commands only (lines starting with ubuntu@)
 grep "^ubuntu@" logs/container-sessions/session-*.md
+
+# Count total sessions
+ls logs/container-sessions/session-*.md | wc -l
 ```
+
+## When Generated
+
+Created by `./scripts/run.sh` every time the container is launched. Records from container start until you type `exit`.
 
 ## Use Cases
 
-### 1. Debugging
-Review what happened when something went wrong:
-```bash
-# Find when error occurred
-grep -n "error" logs/container-sessions/session-2025-11-05_*.md
-```
-
-### 2. Reproducibility
-See exactly what commands were run:
-```bash
-# Extract command history
-grep "^ubuntu@" logs/container-sessions/session-2025-11-05_16-00-00.md
-```
-
-### 3. Documentation
-Session logs automatically document your work:
-- What was tested
-- What results were obtained
-- What commands were used
-
-### 4. Troubleshooting
-Share complete session logs when asking for help - provides full context without missing details.
+- **Debugging** - Review what happened when something went wrong
+- **Reproducibility** - See exact commands that were run
+- **Documentation** - Automatic record of testing/usage
+- **Troubleshooting** - Share complete context when asking for help
 
 ## Cleanup
 
 ```bash
 # Delete logs older than 7 days
-find logs/container-sessions -name "*.md" -mtime +7 -delete
+find logs/container-sessions -name "session-*.md" -mtime +7 -delete
 
-# Keep only the 10 most recent logs
-ls -t logs/container-sessions/*.md | tail -n +11 | xargs rm -f
+# Keep only 10 most recent sessions
+ls -t logs/container-sessions/session-*.md | tail -n +11 | xargs rm -f
 ```
-
-## Benefits
-
-- 📝 **Complete audit trail** - Never lose track of what you did
-- 🐛 **Debug after the fact** - Review issues without reproducing them
-- 📚 **Automatic documentation** - No need to manually record commands
-- 🔍 **Searchable history** - Find specific commands or outputs easily
-- ✅ **Clean format** - Markdown with no ANSI escape codes
 
 ## Privacy Note
 
-Session logs may contain:
-- File paths from your home directory
+Session logs contain everything typed in the container including:
 - Command history
+- File paths
 - Application outputs
 
 Review logs before sharing if they might contain sensitive information.
